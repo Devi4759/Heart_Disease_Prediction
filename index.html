@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Heart Disease Prediction</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <style>
+        body {
+            font-family: 'Roboto', sans-serif;
+            background-color: #f4f4f4;
+            margin: 0;
+            background-image: url('myenv/675253.jpg');
+            background-size: cover;
+            background-position: center;
+            background-attachment: fixed;
+        }
+
+        nav {
+            background-color: rgba(19, 18, 18, 0.73);
+        
+            padding: 20px;
+            text-align: center;
+        }
+
+        nav a {
+            color: white;
+            text-decoration: none;
+            margin: 0 20px;
+            font-size: 18px;
+        }
+
+        nav a:hover {
+            color: #f44336;
+        }
+
+        .dropdown {
+            display: inline-block;
+            position: relative;
+        }
+
+        .dropdown .dropbtn {
+            color: white;
+            font-size: 18px;
+            cursor: pointer;
+            background-color: transparent;
+            
+            border: none;
+        }
+
+        .dropdown-content {
+            display: none;
+            position: absolute;
+            background-color: rgba(4, 4, 4, 0.8);
+            min-width: 160px;
+            box-shadow: 0px 8px 16px rgba(0, 0, 0, 0.2);
+        }
+
+        .dropdown-content a {
+            color: white;
+            padding: 5px 0;
+            text-decoration: none;
+            text-align: center;
+        }
+
+        .dropdown-content a:hover {
+            color: red;
+        }
+
+        .dropdown:hover .dropdown-content {
+            display: block;
+        }
+
+        form {
+            display: flex;
+            flex-direction: column;
+            max-width: 500px;
+            margin: 20px auto;
+            background-color: rgba(255, 255, 255, 0.8);
+            background-image: url('myenv/675253.jpg');
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3);
+        }
+
+        input, button {
+            padding: 10px;
+            margin-bottom: 10px;
+            border-radius: 5px;
+            border: 1px solid #ddd;
+        }
+
+        button {
+            background-color: #007BFF;
+            color: white;
+            cursor: pointer;
+            border: none;
+            transition: background-color 0.3s ease;
+        }
+
+        button:hover {
+            background-color: #0056b3;
+        }
+
+        #result {
+            text-align: center;
+            font-size: 1em;
+            margin-top: 10px;
+            padding: 10px;
+            border-radius: 10px;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+        }
+
+        #map {
+            height: 500px;
+            width: 100%;
+            margin-top: 20px;
+            border-radius: 10px;
+        }
+
+        .hospital-card {
+            background-color: #fff;
+            padding: 15px;
+            border-radius: 8px;
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
+            margin: 10px;
+            text-align: center;
+            color: #333;
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <nav>
+            <a href="/">Home</a>
+            <a href="/blog">Blog</a>
+            <div class="dropdown">
+                <button class="dropbtn">FAQ</button>
+                <div class="dropdown-content">
+                    <a href="{{ url_for('faq1') }}">What is heart disease?</a>
+
+                    <a href="{{ url_for('faq2') }}">Why is heart health important?</a>
+                    <a href="{{ url_for('faq3') }}">Healthy Lifestyle & Preventive Measures</a>
+                </div>
+            </div>
+        </nav>
+    </header>
+    <div class="container">
+        <form id="predictionForm">
+            <input type="number" name="age" placeholder="Age" required>
+            <input type="number" name="sex" placeholder="Sex (0 = Female, 1 = Male)" required>
+            <input type="number" name="cp" placeholder="Chest Pain Type (0-3)" required>
+            <input type="number" name="trestbps" placeholder="Resting Blood Pressure (mm Hg)" required>
+            <input type="number" name="chol" placeholder="Cholesterol (mg/dl)" required>
+            <input type="number" name="fbs" placeholder="Fasting Blood Sugar > 120 mg/dl (0/1)" required>
+            <input type="number" name="restecg" placeholder="Resting ECG (0-2)" required>
+            <input type="number" name="thalach" placeholder="Maximum Heart Rate Achieved" required>
+            <input type="number" name="exang" placeholder="Exercise Induced Angina (0/1)" required>
+            <input type="number" name="oldpeak" step="0.1" placeholder="ST Depression (Oldpeak)" required>
+            <input type="number" name="slope" placeholder="Slope of ST Segment (0-2)" required>
+            <input type="number" name="ca" placeholder="Number of Major Vessels (0-3)" required>
+            <input type="number" name="thal" placeholder="Thalassemia (1 = Normal, 2 = Fixed Defect, 3 = Reversible Defect)" required>
+            <button type="submit">Predict</button>
+        </form>
+
+        <div id="result"></div>
+        <div id="map"></div>
+        <div id="hospitals"></div>
+    </div>
+
+    <script>
+        let map;
+
+        function initMap(lat, lng) {
+            map = L.map('map').setView([lat, lng], 14);
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                maxZoom: 19,
+                attribution: '© OpenStreetMap contributors'
+            }).addTo(map);
+            L.marker([lat, lng]).addTo(map).bindPopup('Your Location').openPopup();
+        }
+
+        async function fetchHospitals(lat, lng) {
+            const hospitalsDiv = document.getElementById('hospitals');
+            hospitalsDiv.innerHTML = "<h2>Nearby Hospitals:</h2>";
+
+            try {
+                const response = await fetch(`https://overpass-api.de/api/interpreter?data=[out:json];node[amenity=hospital](around:5000,${lat},${lng});out;`);
+                const data = await response.json();
+
+                if (data.elements.length === 0) {
+                    hospitalsDiv.innerHTML += "<p>No hospitals found nearby.</p>";
+                    return;
+                }
+
+                data.elements.slice(0, 6).forEach(hospital => {
+                    const { lat: hospitalLat, lon: hospitalLon, tags } = hospital;
+                    const name = tags.name || 'Unnamed Hospital';
+                    hospitalsDiv.innerHTML += `
+                        <div class="hospital-card">
+                            <h4>${name}</h4>
+                            <p>Distance: ${(hospitalLat - lat).toFixed(2)} km</p>
+                        </div>`;
+                    L.marker([hospitalLat, hospitalLon]).addTo(map).bindPopup(`${name}`);
+                });
+            } catch (error) {
+                console.error('Error fetching hospitals:', error);
+                hospitalsDiv.innerHTML += "<p>Error fetching hospitals.</p>";
+            }
+        }
+
+        document.getElementById('predictionForm').addEventListener('submit', async function(event) {
+            event.preventDefault();
+            const formData = new FormData(event.target);
+            const data = Object.fromEntries(formData.entries());
+
+            try {
+                const response = await fetch('/predict', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(data)
+                });
+                const result = await response.json();
+                document.getElementById('result').innerHTML = `<h2>${result.prediction === 1 ? 'Heart Disease Detected' : 'No Heart Disease Detected'}</h2>`;
+
+                if (result.prediction === 1) {
+                    navigator.geolocation.getCurrentPosition(({ coords }) => {
+                        initMap(coords.latitude, coords.longitude);
+                        fetchHospitals(coords.latitude, coords.longitude);
+                    }, () => alert('Location permission denied!'));
+                }
+            } catch (error) {
+                console.error('Error during prediction:', error);
+                document.getElementById('result').innerHTML = `<h2>Error predicting heart disease.</h2>`;
+            }
+        });
+    </script>
+</body>
+</html>
